@@ -11,9 +11,57 @@ Install:
        - Departures Card 
 
 # Setup configuration.yaml
-    - Add sensor
-    
-    - Add template
+    - Add sendor:
+        sensor:
+          - platform: rest
+            name: {{ name of sensor }}
+            resource: https://data.etabus.gov.hk/v1/transport/kmb/eta/{bus stop}/{route}/1
+            scan_interval: 30
+            value_template: "OK"
+            json_attributes:
+              - data
+              
+    - Add template sensor
+        template:
+          - sensor:
+              - name: {{ name of template }}
+                state: >
+                  {% set raw = state_attr('sensor.{{ name of sensor }}', 'data') %}
+                  {% if raw and raw | length > 0 %}
+                    {{ raw | selectattr('route', 'eq', '{route}') | selectattr('eta', 'ne', None) | list | length }} departures
+                  {% else %}
+                    No service
+                  {% endif %}
+                attributes:
+                  transport: BUS
+                  direction: {{ name of director }}
+                  line_id: {{ route id }}
+                  line_name: {{ route }}
+                  times: >-
+                    {% set raw = state_attr('sensor.{{ name of sensor }}', 'data') %}
+                    {% set ns = namespace(departures=[]) %}
+                    {% if raw %}
+                      {% for bus in raw if bus.route == '{route}' and bus.eta %}
+                        {% set ns.departures = ns.departures + [{
+                          "trip_id": bus.eta ~ bus.route, 
+                          "line": { route },
+                          "head_sign": bus.dest_tc,
+                          "planned": bus.eta,
+                          "estimated": bus.eta,
+                          "delay": 0,
+                          "cancel": false,
+                          "alert": false,
+                          "direction": bus.dir | default(''),
+                          "remark": bus.rmk_tc | default('')
+                        }] %}
+                      {% endfor %}
+                    {% endif %}
+                    {{ ns.departures }}
+
+** Change {{ name of sensor }}
+** Change {{ name of template }}
+** Change {route} : 巴士編號
+** {{ route id }} : route unique name.
 
 # How to use ..
 1. Dashboard --> Edit --> New
